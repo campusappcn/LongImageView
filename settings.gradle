@@ -1,1 +1,1 @@
-include ':app', ':longimageview'
+include ':app', ':library'
