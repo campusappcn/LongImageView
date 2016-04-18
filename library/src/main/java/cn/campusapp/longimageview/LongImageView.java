@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.PointF;
 import android.graphics.Rect;
@@ -37,22 +36,22 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 
 /**
- * 可以支持大图区块浏览的控件
+ * A view to show long image.
+ * <p/>
+ * Supported features:
+ * <ol>
+ * <li>Region decode on long image</li>
+ * <li>Scroll</li>
+ * <li>Zoom</li>
+ * <li>Gestures</li>
+ * </ol>
  * <p/>
  * Created by chen on 16/4/14.
  */
 @SuppressWarnings("UnusedDeclaration")
 public class LongImageView extends View {
     private static final String TAG = "LargeImageView";
-    private static final Paint DEBUG_PAINT = new Paint();
     public static long MIN_FLING_DELTA_TIME = 150L;
-
-    static {
-        DEBUG_PAINT.setStrokeWidth(4);
-        DEBUG_PAINT.setStyle(Paint.Style.STROKE);
-        DEBUG_PAINT.setColor(0xff00bcd5);
-    }
-
     private final GestureListener mOnGestureListener = new GestureListener();
     private final ScaleListener mOnScaleListener = new ScaleListener();
     private final Rect mViewPort = new Rect();
@@ -68,7 +67,6 @@ public class LongImageView extends View {
     private float mMinFlingVelocity;
     private float mMaxFlingVelocity;
     private boolean mImageChanged = true;
-    private boolean mDebugMode;
 
     public LongImageView(Context context) {
         super(context);
@@ -91,12 +89,6 @@ public class LongImageView extends View {
         init(context, attrs);
     }
 
-    /**
-     * Drawable 转换成 Bitmap
-     *
-     * @param drawable Drawable 对象
-     * @return 对应的 Bitmap
-     */
     static Bitmap drawableToBitmap(@NonNull Drawable drawable) {
         if (drawable instanceof BitmapDrawable) {
             return ((BitmapDrawable) drawable).getBitmap();
@@ -110,14 +102,6 @@ public class LongImageView extends View {
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);
         return bitmap;
-    }
-
-    public boolean isDebugMode() {
-        return mDebugMode;
-    }
-
-    public void setDebugMode(boolean debugMode) {
-        mDebugMode = debugMode;
     }
 
     @CallSuper
@@ -173,7 +157,7 @@ public class LongImageView extends View {
             requestLayout();
             invalidate();
 
-            // 避免显示黑白图片
+            // double invalidate to avoid some bugs
             post(new Runnable() {
                 @Override
                 public void run() {
@@ -259,19 +243,9 @@ public class LongImageView extends View {
             mBitmapRegion.set(regionDecoder.getRegion());
             mBitmapRegion.offsetTo(0, 0);
 
-            if (isDebugMode()) {
-                DEBUG_PAINT.setColor(0x00dedede);
-                canvas.drawRect(regionDecoder.getRegion(), DEBUG_PAINT);
-            }
-
             if (bitmap != null) {
                 canvas.drawBitmap(bitmap, mBitmapRegion, mViewPort, null);
             }
-        }
-
-        if (isDebugMode()) {
-            DEBUG_PAINT.setColor(0x00bcd5);
-            canvas.drawRect(mViewPort, DEBUG_PAINT);
         }
     }
 
@@ -280,7 +254,7 @@ public class LongImageView extends View {
         if (!mImageChanged && null != regionDecoder && regionDecoder.isZoomedOut()) {
             stopAllAnimation();
             final float targetScale = regionDecoder.getInitialScale();
-            regionDecoder.restoreCurrentPivot(mStartPivot);
+            regionDecoder.saveCurrentPivot(mStartPivot);
             mTargetPivot.x = regionDecoder.fixPivotX(mStartPivot.x, targetScale);
             mTargetPivot.y = regionDecoder.fixPivotY(mStartPivot.y, targetScale);
             mScaleAnimator.setFloatValues(regionDecoder.getScale(), targetScale);
@@ -310,8 +284,8 @@ public class LongImageView extends View {
             return false;
         }
         stopAllAnimation();
-        float distanceX = 2 * velocityX / mMaxFlingVelocity * getWidth();
-        float distanceY = 2 * velocityY / mMaxFlingVelocity * getHeight();
+        float distanceX = velocityX / mMaxFlingVelocity * getWidth();
+        float distanceY = velocityY / mMaxFlingVelocity * getHeight();
         final RegionDecoder regionDecoder = mRegionDecoder;
         if (null == regionDecoder || mImageChanged || !regionDecoder.canScroll(distanceX, distanceY)) {
             return false;
@@ -383,10 +357,6 @@ public class LongImageView extends View {
             LongImageView.this.performLongClick();
         }
 
-        /**
-         * 处理惯性滑动<br/>
-         * {@inheritDoc}
-         */
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
             if (e1 != null && e2 != null) {
@@ -405,9 +375,6 @@ public class LongImageView extends View {
             }
         }
 
-        /**
-         * 在这里处理单击事件, 触发 OnClickListener 以及其他内置逻辑
-         */
         @Override
         public boolean onSingleTapConfirmed(MotionEvent e) {
             return LongImageView.this.performClick();
@@ -421,7 +388,7 @@ public class LongImageView extends View {
             if (null == regionDecoder || mImageChanged) {
                 return false;
             }
-            regionDecoder.restoreCurrentPivot(mStartPivot);
+            regionDecoder.saveCurrentPivot(mStartPivot);
             float scaleStart = regionDecoder.getScale();
             float scaleEnd;
             if (regionDecoder.isZoomed()) {
@@ -448,8 +415,8 @@ public class LongImageView extends View {
                 return false;
             }
 
-            targetPivotX = regionDecoder.transformAxisX(detector.getFocusX());
-            targetPivotY = regionDecoder.transformAxisY(detector.getFocusY());
+            targetPivotX = regionDecoder.transformXCoordinate(detector.getFocusX());
+            targetPivotY = regionDecoder.transformYCoordinate(detector.getFocusY());
             return true;
         }
 

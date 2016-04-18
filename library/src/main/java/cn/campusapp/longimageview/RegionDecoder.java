@@ -13,64 +13,68 @@ import java.io.InputStream;
 
 
 /**
- * 图片区域解码器<br/>
- * 图片区域的坐标系与{@link LongImageView} 的坐标系不一致, 需要做坐标系变换 (缩放 + 平移)
+ * RegionDecoder takes care of fetching a certain region of image and providing corresponding {@link Bitmap}.
+ * <p/>
+ * By providing a series of methods, RegionDecoder allows user to manipulate
+ * {@link RegionDecoder#mRegionRect} and get correct bitmap:
+ * <ol>
+ * <li>{@link RegionDecoder#scale(float, float, float)}</li>
+ * <li>{@link RegionDecoder#scrollByScaled(float, float)}</li>
+ * <li>{@link RegionDecoder#scrollByUnscaled(float, float)}</li>
+ * </ol>
+ * <p/>
+ * Coordinate system in RegionDecoder differs from that in {@link LongImageView}, so transformation
+ * of coordinates is necessary when passing coordinates between {@link LongImageView} and {@link RegionDecoder}
+ * <p/>
  * Created by chen on 16/4/14.
  */
 @SuppressWarnings("UnusedDeclaration")
 class RegionDecoder {
     private static final String TAG = "RegionDecoder";
     /**
-     * 默认最小缩放比例
+     * Default min scale factor
      */
     private static final float MIN_SCALE_FACTOR = 0.6F;
     /**
-     * 默认最大缩放比例
+     * Default max scale factor
      */
     private static final float MAX_SCALE_FACTOR = 2.0F;
-
-    static {
-    }
-
     private final BitmapFactory.Options mDecodeOptions = new BitmapFactory.Options();
     /**
-     * 初始解码区域
+     * Initial decode region
      */
     private final Rect mInitialRegionRect = new Rect();
     /**
-     * 当前解码区域
+     * Current decode region
      */
     private final Rect mRegionRect = new Rect();
-    /**
-     * BitmapRegionDecoder 对象
-     */
     private final BitmapRegionDecoder mDecoder;
     /**
-     * 显示区域
+     * The rect where current image is shown
      */
     private final Rect mDisplayRect = new Rect();
     /**
-     * 最小缩放比例
+     * Min scale
      */
     private float mMinScale;
     /**
-     * 最大缩放比例
+     * Max scale
      */
     private float mMaxScale;
     /**
-     * 初始缩放比例
+     * Initial scale
      */
     private float mInitialScale;
     /**
-     * 当前缩放比例
+     * Current scale
      */
     private float mScale;
     /**
-     * 图片宽(Px)
+     * Image width in pixels
      */
     private int mImageWidth;
     /**
-     * 图片高(Px)
+     * Image height in pixels
      */
     private int mImageHeight;
 
@@ -163,10 +167,10 @@ class RegionDecoder {
     }
 
     /**
-     * 滑动图片
+     * Scroll image
      *
-     * @param dx x 轴偏移量 (未缩放)
-     * @param dy y 轴偏移量 (为缩放)
+     * @param dx x offset (not transformed)
+     * @param dy y offset (not transformed)
      * @return 是否滑动了
      */
     boolean scrollByUnscaled(float dx, float dy) {
@@ -174,38 +178,31 @@ class RegionDecoder {
     }
 
     /**
-     * 滑动图片
+     * Scroll image
      *
-     * @param scaledDx x 轴偏移量 (已缩放)
-     * @param scaledDy y 轴偏移量 (已缩放)
-     * @return 是否滑动了
+     * @param scaledDx x offset (transformed)
+     * @param scaledDy y offset (transformed)
+     * @return true if region is translated, otherwise false
      */
     boolean scrollByScaled(float scaledDx, float scaledDy) {
         return translateScaled((int) scaledDx, (int) scaledDy);
     }
 
-    /**
-     * 根据目标缩放比例和给定的坐标预测实际解码区域中心点
-     *
-     * @param targetScale    目标缩放比
-     * @param pivotX         目标解码区域 x 轴中心点
-     * @param pivotY         目标解码区域 y 轴中心点
-     * @param outTargetPivot 出参, 用于存储实际的中心点
-     */
     void predicateTargetPivot(float targetScale, float pivotX, float pivotY, PointF outTargetPivot) {
         targetScale = ensureScaleRange(targetScale);
-        final float x = fixPivotX(transformAxisX(pivotX), targetScale);
-        final float y = fixPivotY(transformAxisY(pivotY), targetScale);
+        final float x = fixPivotX(transformXCoordinate(pivotX), targetScale);
+        final float y = fixPivotY(transformYCoordinate(pivotY), targetScale);
 
         outTargetPivot.set(x, y);
     }
 
     /**
-     * 根据给定的 x 轴坐标计算合法的解码区域 x 轴中心点, 确保解码区域不会超出图片边界
+     * Determine actual x-coordinate by given transformed x-coordinate and scale, ensure that
+     * {@link #mRegionRect} does not exceed the bounds of image
      *
-     * @param transformedX 已进行坐标变换的 x 轴坐标
-     * @param scale        缩放比例
-     * @return 合法的 x 轴坐标
+     * @param transformedX transformed x-coordinate
+     * @param scale        target scale
+     * @return fixed x-coordinate
      */
     float fixPivotX(float transformedX, float scale) {
         final float targetWidthInset = getWidthInset(scale);
@@ -213,15 +210,16 @@ class RegionDecoder {
     }
 
     /**
-     * 根据给定的 y 轴坐标计算合法的解码区域 y 轴中心点, 确保解码区域不会超出图片边界
+     * Determine actual y-coordinate by given transformed y-coordinate and scale, ensure that
+     * {@link #mRegionRect} does not exceed the bounds of image
      *
-     * @param transformY 已进行坐标变换的 y 轴坐标
-     * @param scale      缩放比例
-     * @return 合法的 y 轴坐标
+     * @param transformedY transformed y-coordinate
+     * @param scale        target scale
+     * @return fixed y-coordinate
      */
-    float fixPivotY(float transformY, float scale) {
+    float fixPivotY(float transformedY, float scale) {
         final float targetHeightInset = getHeightInset(scale);
-        return Math.min(mImageHeight - targetHeightInset, Math.max(targetHeightInset, transformY));
+        return Math.min(mImageHeight - targetHeightInset, Math.max(targetHeightInset, transformedY));
     }
 
     private float getWidthInset(float scale) {
@@ -233,20 +231,21 @@ class RegionDecoder {
     }
 
     /**
-     * 存储当前的界面区域中心点
+     * Restore current pivot of {@link #mRegionRect}, the saved coordinates are based on
+     * {@link RegionDecoder}'s coordinate system
      *
-     * @param outPivot 出参, 用于存储中心点
+     * @param outPivot out param, saves current pivot of decode region
      */
-    void restoreCurrentPivot(PointF outPivot) {
+    void saveCurrentPivot(PointF outPivot) {
         outPivot.set(mRegionRect.centerX(), mRegionRect.centerY());
     }
 
     /**
-     * 进行图片缩放
+     * Scale current image and update {@link #mRegionRect}'s pivot
      *
-     * @param targetScale       目标缩放比
-     * @param transformedPivotX 变换后的 x 轴坐标
-     * @param transformedPivotY 变换后的 y 轴坐标
+     * @param targetScale       target Scale
+     * @param transformedPivotX transformed x-coordinate
+     * @param transformedPivotY transformed y-coordinate
      */
     void scale(float targetScale, float transformedPivotX, float transformedPivotY) {
         mScale = ensureScaleRange(targetScale);
@@ -274,41 +273,23 @@ class RegionDecoder {
         return fixedScrollDx != 0 || fixedScrollDy != 0;
     }
 
-    /**
-     * x 轴坐标转换
-     *
-     * @param x 未转换的 x 轴坐标
-     * @return 转换后的 x 轴坐标
-     */
-    float transformAxisX(float x) {
-        return _scaled(x, mScale) + getAxisXOffset();
+    float transformXCoordinate(float x) {
+        return _scaled(x, mScale) + getXCoordinateOffset();
     }
 
-    /**
-     * 获取缩放后的长度
-     *
-     * @param unScaled 未缩放的长度
-     * @return 缩放后的长度
-     */
+    float transformYCoordinate(float y) {
+        return _scaled(y, mScale) + getYCoordinateOffset();
+    }
+
     float getScaled(float unScaled) {
         return _scaled(unScaled, mScale);
     }
 
-    /**
-     * y 轴坐标转换
-     *
-     * @param y 未转换的 y 轴坐标
-     * @return 转换后的 y 轴坐标
-     */
-    float transformAxisY(float y) {
-        return _scaled(y, mScale) + getAxisYOffset();
-    }
-
-    private float getAxisXOffset() {
+    private float getXCoordinateOffset() {
         return mRegionRect.left;
     }
 
-    private float getAxisYOffset() {
+    private float getYCoordinateOffset() {
         return mRegionRect.top;
     }
 
@@ -321,22 +302,22 @@ class RegionDecoder {
     }
 
     /**
-     * 按照给定的比例进行缩放
+     * Scale given unscaled distance
      *
-     * @param unScaled 未缩放的长度
-     * @param scale    缩放比
-     * @return 缩放后的长度
+     * @param unScaled unscaled distance
+     * @param scale    scale factor
+     * @return scaled distance
      */
     private float _scaled(float unScaled, float scale) {
         return unScaled * mInitialRegionRect.width() / mDisplayRect.width() / scale;
     }
 
     /**
-     * 可否滑动
+     * Determine whether current image can scroll
      *
-     * @param dx x 方向滑动距离 (未转换)
-     * @param dy y 方向滑动距离 (已转换)
-     * @return 是否可以滑动
+     * @param dx x-offset (not transformed)
+     * @param dy y-offset (not transformed)
+     * @return true if current image can scroll, otherwise false
      */
     boolean canScroll(float dx, float dy) {
         return canScrollX(dx) || canScrollY(dy);
@@ -359,7 +340,7 @@ class RegionDecoder {
     }
 
     private int getFixedScrollX(int dx) {
-        if (mScale >= mInitialScale) { // 放大
+        if (mScale >= mInitialScale) {
             if (mRegionRect.left + dx < 0) {
                 return -mRegionRect.left;
             } else if (mRegionRect.right + dx > mImageWidth) {
@@ -367,7 +348,7 @@ class RegionDecoder {
             } else {
                 return dx;
             }
-        } else { // 缩小
+        } else {
             if (mRegionRect.left + dx > 0) {
                 return -mRegionRect.left;
             } else if (mRegionRect.right + dx < mImageWidth) {
@@ -379,7 +360,7 @@ class RegionDecoder {
     }
 
     private int getFixedScrollY(int dy) {
-        if (mScale < mInitialScale) { // 缩小状态下不能纵向移动
+        if (mScale < mInitialScale) {
             return 0;
         } else if (mRegionRect.top <= 0 && mRegionRect.bottom >= mImageHeight) { // 纵向已经全部展示
             return 0;
@@ -407,5 +388,11 @@ class RegionDecoder {
             } catch (Throwable ignored) {
             }
         }
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+        close();
     }
 }

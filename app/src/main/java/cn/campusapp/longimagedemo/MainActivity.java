@@ -20,7 +20,6 @@ public class MainActivity extends AppCompatActivity {
         if (liv == null) {
             return;
         }
-        liv.setDebugMode(true);
         try {
             // 这张图在首次设置时会显示为黑白图片, 但是第二次调用 invalidate() 后就变成彩色了
             liv.setImage(getAssets().open("beyond_earth.jpg"));
