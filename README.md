@@ -12,18 +12,22 @@ Features:
 
 Usage:
 
-```
+```XML
+
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
     
+    <!-- set drawable from xml -->
     <cn.campusapp.longimageview.LongImageView
         android:id="@+id/long_image_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="match_parent"
+        app:src="@drawable/some_drawable"/>
 </RelativeLayout>
 ```
 
