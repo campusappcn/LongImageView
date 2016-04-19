@@ -142,6 +142,7 @@ class RegionDecoder {
             mInitialRegionRect.offsetTo(0, 0);
         } else {
             mInitialRegionRect.offsetTo(0, -(mInitialRegionRect.height() - mImageHeight) / 2);
+            mMaxScale = mInitialScale * mInitialRegionRect.height()  / mImageHeight;
         }
         mRegionRect.set(mInitialRegionRect);
     }
@@ -189,7 +190,7 @@ class RegionDecoder {
      * @return true if region is translated, otherwise false
      */
     boolean scrollByUnscaled(float dx, float dy) {
-        return translateScaled((int) _scaled(dx, mScale), (int) _scaled(dy, mScale));
+        return translateScaled(_scaled(dx, mScale), _scaled(dy, mScale));
     }
 
     /**

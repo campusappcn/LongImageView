@@ -28,6 +28,7 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewParent;
 import android.view.animation.DecelerateInterpolator;
 
 import java.io.ByteArrayInputStream;
@@ -209,12 +210,35 @@ public class LongImageView extends View {
             mPointerUpTime = event.getEventTime();
         }
 
-        boolean handled = mScaleGestureDetector.onTouchEvent(event);
+        mScaleGestureDetector.onTouchEvent(event);
+        boolean handled = false;
         if (!mScaleGestureDetector.isInProgress()) {
-            handled |= mGestureDetector.onTouchEvent(event);
+            handled = mGestureDetector.onTouchEvent(event);
         }
 
-        return action == MotionEvent.ACTION_POINTER_UP ? handled | handlePointerUp(event) : handled;
+        final ViewParent parent = this.getParent();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                if (parent != null) {
+                    parent.requestDisallowInterceptTouchEvent(handled);
+                }
+                return handled;
+            case MotionEvent.ACTION_POINTER_UP:
+                return handled | handlePointerUp(event);
+            case MotionEvent.ACTION_MOVE:
+                if (parent != null) {
+                    parent.requestDisallowInterceptTouchEvent(handled);
+                }
+                return handled;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (parent != null) {
+                    parent.requestDisallowInterceptTouchEvent(false);
+                }
+                return handled;
+            default:
+                return handled;
+        }
     }
 
     @Override
@@ -409,8 +433,9 @@ public class LongImageView extends View {
                         regionDecoder.fixPivotY(targetPivotY, targetScale)
                 );
                 invalidate();
+                return true;
             }
-            return true;
+            return false;
         }
     }
 
