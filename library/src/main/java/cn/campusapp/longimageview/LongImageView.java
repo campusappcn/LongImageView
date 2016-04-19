@@ -1,6 +1,6 @@
 package cn.campusapp.longimageview;
 
-import android.animation.AnimatorSet;
+import android.animation.TypeEvaluator;
 import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -10,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -50,6 +51,7 @@ import java.io.InputStream;
  */
 @SuppressWarnings("UnusedDeclaration")
 public class LongImageView extends View {
+    public static final long DEFAULT_DURATION = 300L;
     private static final String TAG = "LargeImageView";
     public static long MIN_FLING_DELTA_TIME = 150L;
     private final GestureListener mOnGestureListener = new GestureListener();
@@ -57,9 +59,10 @@ public class LongImageView extends View {
     private final Rect mViewPort = new Rect();
     private final PointF mStartPivot = new PointF();
     private final PointF mTargetPivot = new PointF();
-    private final ValueAnimator mScaleAnimator = ValueAnimator.ofFloat();
+    private final RectF mStartRect = new RectF();
+    private final RectF mTargetRect = new RectF();
+    private final ValueAnimator mRegionAnimator = ValueAnimator.ofObject(new RectFEvaluator(), mStartRect, mTargetRect);
     private final Rect mBitmapRegion = new Rect();
-    private AnimatorSet mFlingAnimators;
     private GestureDetector mGestureDetector;
     private ScaleGestureDetector mScaleGestureDetector;
     private RegionDecoder mRegionDecoder;
@@ -111,7 +114,8 @@ public class LongImageView extends View {
 
         mGestureDetector = new GestureDetector(context, mOnGestureListener);
         mScaleGestureDetector = new ScaleGestureDetector(context, mOnScaleListener);
-        mScaleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+        mRegionAnimator.setInterpolator(new DecelerateInterpolator());
+        mRegionAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 final RegionDecoder regionDecoder = mRegionDecoder;
@@ -119,13 +123,9 @@ public class LongImageView extends View {
                     animation.cancel();
                     return;
                 }
-                final Float scale = ((Float) animation.getAnimatedValue());
-                final float fraction = animation.getAnimatedFraction();
-                if (scale != null) {
-                    regionDecoder.scale(scale,
-                            mStartPivot.x + (mTargetPivot.x - mStartPivot.x) * fraction,
-                            mStartPivot.y + (mTargetPivot.y - mStartPivot.y) * fraction
-                    );
+                final RectF intermediateRect = (RectF) animation.getAnimatedValue();
+                if (intermediateRect != null) {
+                    regionDecoder.updateRegion(intermediateRect);
                     invalidate();
                 }
             }
@@ -214,7 +214,7 @@ public class LongImageView extends View {
             handled |= mGestureDetector.onTouchEvent(event);
         }
 
-        return action == MotionEvent.ACTION_UP ? handled | handleKeyUp(event) : handled;
+        return action == MotionEvent.ACTION_POINTER_UP ? handled | handlePointerUp(event) : handled;
     }
 
     @Override
@@ -240,7 +240,7 @@ public class LongImageView extends View {
         final RegionDecoder regionDecoder = mRegionDecoder;
         if (regionDecoder != null) {
             Bitmap bitmap = regionDecoder.getBitmap();
-            mBitmapRegion.set(regionDecoder.getRegion());
+            regionDecoder.saveCurrentRegion(mBitmapRegion);
             mBitmapRegion.offsetTo(0, 0);
 
             if (bitmap != null) {
@@ -249,30 +249,23 @@ public class LongImageView extends View {
         }
     }
 
-    protected boolean handleKeyUp(MotionEvent event) {
+    protected boolean handlePointerUp(MotionEvent event) {
         final RegionDecoder regionDecoder = mRegionDecoder;
-        if (!mImageChanged && null != regionDecoder && regionDecoder.isZoomedOut()) {
+        if (!mImageChanged && null != regionDecoder && regionDecoder.isZoomedOut() && event.getPointerCount() == 0) {
             stopAllAnimation();
             final float targetScale = regionDecoder.getInitialScale();
-            regionDecoder.saveCurrentPivot(mStartPivot);
-            mTargetPivot.x = regionDecoder.fixPivotX(mStartPivot.x, targetScale);
-            mTargetPivot.y = regionDecoder.fixPivotY(mStartPivot.y, targetScale);
-            mScaleAnimator.setFloatValues(regionDecoder.getScale(), targetScale);
-            mScaleAnimator.start();
+            regionDecoder.saveCurrentRegion(mStartRect);
+            regionDecoder.predicateTargetRegion(targetScale, mStartRect.centerX(), mStartRect.centerY(), mTargetRect);
+            mRegionAnimator.setDuration(DEFAULT_DURATION);
+            mRegionAnimator.setObjectValues(mStartRect, mTargetRect);
+            mRegionAnimator.start();
             return true;
         }
         return false;
     }
 
     private void stopAllAnimation() {
-        mScaleAnimator.cancel();
-
-        final AnimatorSet flingAnimators = mFlingAnimators;
-
-        if (null != flingAnimators) {
-            flingAnimators.cancel();
-            flingAnimators.removeAllListeners();
-        }
+        mRegionAnimator.cancel();
     }
 
     private boolean onFling(
@@ -292,32 +285,11 @@ public class LongImageView extends View {
         }
         double totalDistance = Math.hypot(distanceX, distanceY);
         long duration = (long) Math.min(Math.max(300, totalDistance / 5), 800);
-
-        final ValueAnimator xAnim = ValueAnimator
-                .ofFloat(0F, regionDecoder.getScaled(distanceX))
-                .setDuration(duration);
-        final ValueAnimator yAnim = ValueAnimator
-                .ofFloat(0F, regionDecoder.getScaled(distanceY))
-                .setDuration(duration);
-        mFlingAnimators = new AnimatorSet();
-        mFlingAnimators.playTogether(xAnim, yAnim);
-        mFlingAnimators.setInterpolator(new DecelerateInterpolator());
-        yAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            float previousX = 0F;
-            float previousY = 0F;
-
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                float x = (Float) xAnim.getAnimatedValue();
-                float y = (Float) yAnim.getAnimatedValue();
-                if (regionDecoder.scrollByScaled(x - previousX, y - previousY)) {
-                    invalidate();
-                    previousX = x;
-                    previousY = y;
-                }
-            }
-        });
-        mFlingAnimators.start();
+        regionDecoder.saveCurrentRegion(mStartRect);
+        mTargetRect.set(mStartRect);
+        mTargetRect.offset(-regionDecoder.getScaled(distanceX), -regionDecoder.getScaled(distanceY));
+        mRegionAnimator.setDuration(duration);
+        mRegionAnimator.start();
         return true;
     }
 
@@ -388,7 +360,7 @@ public class LongImageView extends View {
             if (null == regionDecoder || mImageChanged) {
                 return false;
             }
-            regionDecoder.saveCurrentPivot(mStartPivot);
+            regionDecoder.saveCurrentRegion(mStartRect);
             float scaleStart = regionDecoder.getScale();
             float scaleEnd;
             if (regionDecoder.isZoomed()) {
@@ -397,9 +369,10 @@ public class LongImageView extends View {
                 scaleEnd = regionDecoder.getMaxScale();
             }
 
-            regionDecoder.predicateTargetPivot(scaleEnd, e.getX(), e.getY(), mTargetPivot);
-            mScaleAnimator.setFloatValues(scaleStart, scaleEnd);
-            mScaleAnimator.start();
+            regionDecoder.predicateTargetRegion(scaleEnd, e.getX(), e.getY(), mTargetRect);
+            mRegionAnimator.setDuration(300L);
+            mRegionAnimator.setObjectValues(mStartRect, mTargetRect);
+            mRegionAnimator.start();
             return true;
         }
     }
@@ -438,6 +411,21 @@ public class LongImageView extends View {
                 invalidate();
             }
             return true;
+        }
+    }
+
+    private class RectFEvaluator implements TypeEvaluator<RectF> {
+        private RectF mResult = new RectF();
+
+        @Override
+        public RectF evaluate(float fraction, RectF startValue, RectF endValue) {
+            mResult.set(
+                    startValue.left + (endValue.left - startValue.left) * fraction,
+                    startValue.top + (endValue.top - startValue.top) * fraction,
+                    startValue.right + (endValue.right - startValue.right) * fraction,
+                    startValue.bottom + (endValue.bottom - startValue.bottom) * fraction
+            );
+            return mResult;
         }
     }
 }

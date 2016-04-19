@@ -3,8 +3,8 @@ package cn.campusapp.longimageview;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapRegionDecoder;
-import android.graphics.PointF;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
@@ -166,12 +166,27 @@ class RegionDecoder {
         return mRegionRect;
     }
 
+    void updateRegion(RectF rectF) {
+        mScale = mInitialRegionRect.width() / rectF.width();
+        float pivotX = fixPivotX(rectF.centerX(), mScale);
+        float pivotY = fixPivotY(rectF.centerY(), mScale);
+
+        float widthInset = getRegionWidth(mScale) / 2;
+        float heightInset = getRegionHeight(mScale) / 2;
+        mRegionRect.set(
+                (int) (pivotX - widthInset),
+                (int) (pivotY - heightInset),
+                (int) (pivotX + widthInset),
+                (int) (pivotY + heightInset)
+        );
+    }
+
     /**
      * Scroll image
      *
      * @param dx x offset (not transformed)
      * @param dy y offset (not transformed)
-     * @return 是否滑动了
+     * @return true if region is translated, otherwise false
      */
     boolean scrollByUnscaled(float dx, float dy) {
         return translateScaled((int) _scaled(dx, mScale), (int) _scaled(dy, mScale));
@@ -188,12 +203,19 @@ class RegionDecoder {
         return translateScaled((int) scaledDx, (int) scaledDy);
     }
 
-    void predicateTargetPivot(float targetScale, float pivotX, float pivotY, PointF outTargetPivot) {
+    void predicateTargetRegion(float targetScale, float pivotX, float pivotY, RectF outTargetRegion) {
         targetScale = ensureScaleRange(targetScale);
-        final float x = fixPivotX(transformXCoordinate(pivotX), targetScale);
-        final float y = fixPivotY(transformYCoordinate(pivotY), targetScale);
+        final float transformedPivotX = fixPivotX(transformXCoordinate(pivotX), targetScale);
+        final float transformedPivotY = fixPivotY(transformYCoordinate(pivotY), targetScale);
 
-        outTargetPivot.set(x, y);
+        final float widthInset = getRegionWidth(targetScale) / 2;
+        final float heightInset = getRegionHeight(targetScale) / 2;
+        outTargetRegion.set(
+                (transformedPivotX - widthInset),
+                (transformedPivotY - heightInset),
+                (transformedPivotX + widthInset),
+                (transformedPivotY + heightInset)
+        );
     }
 
     /**
@@ -231,13 +253,21 @@ class RegionDecoder {
     }
 
     /**
-     * Restore current pivot of {@link #mRegionRect}, the saved coordinates are based on
-     * {@link RegionDecoder}'s coordinate system
+     * Save current decode region
      *
-     * @param outPivot out param, saves current pivot of decode region
+     * @param outRect out param, saves current decode region
      */
-    void saveCurrentPivot(PointF outPivot) {
-        outPivot.set(mRegionRect.centerX(), mRegionRect.centerY());
+    void saveCurrentRegion(Rect outRect) {
+        outRect.set(mRegionRect);
+    }
+
+    /**
+     * Save current decode region
+     *
+     * @param outRect out param, saves current decode region
+     */
+    void saveCurrentRegion(RectF outRect) {
+        outRect.set(mRegionRect);
     }
 
     /**
@@ -266,10 +296,10 @@ class RegionDecoder {
         return Math.min(mMaxScale, Math.max(targetScale, mMinScale));
     }
 
-    private boolean translateScaled(int scaledDx, int scaledDy) {
-        final int fixedScrollDx = getFixedScrollX(-scaledDx);
-        final int fixedScrollDy = getFixedScrollY(-scaledDy);
-        mRegionRect.offset(fixedScrollDx, fixedScrollDy);
+    private boolean translateScaled(float scaledDx, float scaledDy) {
+        final float fixedScrollDx = getFixedScrollX(-scaledDx);
+        final float fixedScrollDy = getFixedScrollY(-scaledDy);
+        mRegionRect.offset((int) fixedScrollDx, (int) fixedScrollDy);
         return fixedScrollDx != 0 || fixedScrollDy != 0;
     }
 
@@ -339,7 +369,7 @@ class RegionDecoder {
         }
     }
 
-    private int getFixedScrollX(int dx) {
+    private float getFixedScrollX(float dx) {
         if (mScale >= mInitialScale) {
             if (mRegionRect.left + dx < 0) {
                 return -mRegionRect.left;
@@ -359,7 +389,7 @@ class RegionDecoder {
         }
     }
 
-    private int getFixedScrollY(int dy) {
+    private float getFixedScrollY(float dy) {
         if (mScale < mInitialScale) {
             return 0;
         } else if (mRegionRect.top <= 0 && mRegionRect.bottom >= mImageHeight) { // 纵向已经全部展示
