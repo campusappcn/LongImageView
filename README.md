@@ -2,13 +2,13 @@ LongImageView
 
 [![](https://jitpack.io/v/campusappcn/LongImageView.svg)](https://jitpack.io/#campusappcn/LongImageView)
 
-A view to show long image.
+A view to show long image (like weibo).
 
 Features:
 
-1. Long image display + scroll
+1. Long/HUGE image display + scroll
 2. Double click to zoom in/out
-3. Multi-touch to zoom in/out
+3. Pinch to zoom in/out
 
 Usage:
 
@@ -21,7 +21,7 @@ Usage:
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-    
+
     <!-- set drawable from xml -->
     <cn.campusapp.longimageview.LongImageView
         android:id="@+id/long_image_view"
@@ -53,4 +53,19 @@ public class MainActivity extends Activity {
         liv.setImage("/data/local/tmp/some_image.jpg");
     }
 }
+```
+
+Add dependency:
+
+```groovy
+    allprojects {
+        repositories {
+            ...
+            maven { url "https://jitpack.io" }
+        }
+    }
+
+    dependencies {
+        compile 'com.github.campusappcn:LongImageView:1.3.0'
+    }
 ```
