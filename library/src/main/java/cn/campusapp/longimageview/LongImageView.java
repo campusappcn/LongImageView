@@ -52,7 +52,7 @@ import java.io.InputStream;
 @SuppressWarnings("UnusedDeclaration")
 public class LongImageView extends View {
     public static final long DEFAULT_DURATION = 300L;
-    private static final String TAG = "LargeImageView";
+    private static final String TAG = "LongImageView";
     public static long MIN_FLING_DELTA_TIME = 150L;
     private final GestureListener mOnGestureListener = new GestureListener();
     private final ScaleListener mOnScaleListener = new ScaleListener();
