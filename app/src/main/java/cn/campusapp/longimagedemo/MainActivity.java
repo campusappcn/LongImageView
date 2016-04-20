@@ -1,56 +1,39 @@
 package cn.campusapp.longimagedemo;
 
 import android.os.Bundle;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentStatePagerAdapter;
+import android.support.v4.view.PagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
-import android.view.View;
-
-import java.io.IOException;
-
-import cn.campusapp.longimageview.LongImageView;
 
 public class MainActivity extends AppCompatActivity {
-
-    View.OnClickListener listener, listener1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        final LongImageView liv = (LongImageView) findViewById(R.id.long_image_view);
-        if (liv == null) {
+
+        ViewPager pager = (ViewPager) findViewById(R.id.view_pager);
+        if (null == pager) {
             return;
         }
-        try {
-            // 这张图在首次设置时会显示为黑白图片, 但是第二次调用 invalidate() 后就变成彩色了
-            liv.setImage(getAssets().open("beyond_earth.jpg"));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
-        listener = new View.OnClickListener() {
+        PagerAdapter adapter = new FragmentStatePagerAdapter(getSupportFragmentManager()) {
+            private final String[] mAssetImages = {"beyond_earth.jpg", "super_long.png"};
+
             @Override
-            public void onClick(View v) {
-                try {
-                    liv.setImage(getAssets().open("super_long.png"));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                liv.setOnClickListener(listener1);
+            public int getCount() {
+                return mAssetImages.length;
+            }
+
+            @Override
+            public Fragment getItem(int position) {
+                return ImageFragment.newInstance(mAssetImages[position]);
             }
         };
 
-        listener1 = new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    liv.setImage(getAssets().open("beyond_earth.jpg"));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                liv.setOnClickListener(listener);
-            }
-        };
-
-        liv.setOnClickListener(listener);
+        pager.setAdapter(adapter);
+        adapter.notifyDataSetChanged();
     }
 }

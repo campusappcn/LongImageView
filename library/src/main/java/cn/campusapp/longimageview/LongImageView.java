@@ -28,7 +28,6 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.view.ViewParent;
 import android.view.animation.DecelerateInterpolator;
 
 import java.io.ByteArrayInputStream;
@@ -216,29 +215,19 @@ public class LongImageView extends View {
             handled = mGestureDetector.onTouchEvent(event);
         }
 
-        final ViewParent parent = this.getParent();
-        switch (action) {
-            case MotionEvent.ACTION_DOWN:
-                if (parent != null) {
-                    parent.requestDisallowInterceptTouchEvent(handled);
-                }
-                return handled;
-            case MotionEvent.ACTION_POINTER_UP:
-                return handled | handlePointerUp(event);
-            case MotionEvent.ACTION_MOVE:
-                if (parent != null) {
-                    parent.requestDisallowInterceptTouchEvent(handled);
-                }
-                return handled;
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                if (parent != null) {
-                    parent.requestDisallowInterceptTouchEvent(false);
-                }
-                return handled;
-            default:
-                return handled;
-        }
+        return action == MotionEvent.ACTION_POINTER_UP ? handled | handlePointerUp(event) : handled;
+    }
+
+    @Override
+    public boolean canScrollHorizontally(int direction) {
+        final RegionDecoder regionDecoder = mRegionDecoder;
+        return null != regionDecoder && regionDecoder.canScrollX(-direction);
+    }
+
+    @Override
+    public boolean canScrollVertically(int direction) {
+        final RegionDecoder regionDecoder = mRegionDecoder;
+        return null != regionDecoder && regionDecoder.canScrollY(-direction);
     }
 
     @Override

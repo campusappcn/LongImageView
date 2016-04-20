@@ -142,7 +142,7 @@ class RegionDecoder {
             mInitialRegionRect.offsetTo(0, 0);
         } else {
             mInitialRegionRect.offsetTo(0, -(mInitialRegionRect.height() - mImageHeight) / 2);
-            mMaxScale = mInitialScale * mInitialRegionRect.height()  / mImageHeight;
+            mMaxScale = mInitialScale * mInitialRegionRect.height() / mImageHeight;
         }
         mRegionRect.set(mInitialRegionRect);
     }
@@ -354,7 +354,7 @@ class RegionDecoder {
         return canScrollX(dx) || canScrollY(dy);
     }
 
-    private boolean canScrollX(final float dx) {
+    boolean canScrollX(final float dx) {
         if (dx > 0) {
             return mRegionRect.left > 0;
         } else {
@@ -362,7 +362,7 @@ class RegionDecoder {
         }
     }
 
-    private boolean canScrollY(final float dy) {
+    boolean canScrollY(final float dy) {
         if (dy > 0) {
             return mRegionRect.top > 0;
         } else {

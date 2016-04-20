@@ -10,8 +10,8 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="cn.campusapp.longimagedemo.MainActivity">
 
-    <cn.campusapp.longimageview.LongImageView
-        android:id="@+id/long_image_view"
+    <android.support.v4.view.ViewPager
+        android:id="@+id/view_pager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 </RelativeLayout>
