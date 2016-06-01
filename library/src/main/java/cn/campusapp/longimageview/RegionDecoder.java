@@ -87,7 +87,7 @@ class RegionDecoder {
 
         BitmapFactory.Options tmpOptions = new BitmapFactory.Options();
         tmpOptions.inJustDecodeBounds = true;
-        is.mark(1024);
+        is.mark(is.available());
         BitmapFactory.decodeStream(is, null, tmpOptions);
         is.reset();
 
